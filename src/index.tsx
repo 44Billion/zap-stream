@@ -89,7 +89,21 @@ async function doInit() {
       console.error(e);
     }
   }
-  const login = Login.snapshot();
+
+  try {
+    // @ts-ignore
+    const nostr = window.nostr;
+    if (nostr?.peekPublicKey && !Login.takeSnapshot()) {
+      const pk = await nostr.peekPublicKey();
+      if (pk) {
+        Login.loginWithPubkey(pk);
+      }
+    }
+  } catch (e) {
+    console.debug(e);
+  }
+
+  const login = Login.takeSnapshot();
   const follows = login?.state?.follows;
   await System.Init(follows);
   syncClock();
