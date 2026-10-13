@@ -22,6 +22,7 @@ const SESSION_KEY = "session"
 
 export class LoginStore extends ExternalStore<LoginSession | undefined> {
   #session?: LoginSession
+  #managedLoginPending = false
 
   constructor() {
     super()
@@ -58,6 +59,7 @@ export class LoginStore extends ExternalStore<LoginSession | undefined> {
         }
       }
     }
+    if (!this.#session) void this.#restoreManagedLogin()
   }
 
   #makeState() {
@@ -96,6 +98,28 @@ export class LoginStore extends ExternalStore<LoginSession | undefined> {
   logout() {
     this.#session = undefined
     this.#save()
+    void this.#restoreManagedLogin()
+  }
+
+  async #restoreManagedLogin() {
+    if (this.#session || this.#managedLoginPending) return
+
+    const nostr = (window as Window & {
+      nostr?: { peekPublicKey?: () => Promise<string | undefined> }
+    }).nostr
+    if (typeof nostr?.peekPublicKey !== "function") return
+
+    this.#managedLoginPending = true
+    try {
+      const pubkey = await nostr.peekPublicKey()
+      if (/^[0-9a-f]{64}$/.test(pubkey || "") && !this.#session) {
+        this.loginWithPubkey(pubkey!)
+      }
+    } catch {
+      // Silent discovery must not affect the manual login flow.
+    } finally {
+      this.#managedLoginPending = false
+    }
   }
 
   takeSnapshot() {
